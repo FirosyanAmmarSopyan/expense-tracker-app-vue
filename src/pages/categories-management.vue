@@ -26,7 +26,6 @@
             :loading="loading"
             :useCheckbox="false"
             @update:selectedRows="handleCheck"
-            :pagination="false"
             ref="dataTableRef"
           />
         </div>
@@ -252,7 +251,8 @@ const handleEditSubmit = async () => {
 const columns = computed(() => [
   {
     title: 'ID',
-    key: 'id'
+    key: 'id',
+    sorter: true
   },
   {
     title: 'Name',
@@ -332,26 +332,32 @@ const columns = computed(() => [
   }
 ])
 
-const fetchCategories = async (page, pageSize, updateLoading) => {
+const fetchCategories = async (page, pageSize, updateLoading, sort={}) => {
   try {
     if (typeof updateLoading === 'function') {
       updateLoading(true)
     }
-    const response = await useApi().get('/categories')
-    const data = response.data.map((item) => ({
+    const params = {
+      page: page ,
+      limit: pageSize,
+      ...(sort.sortBy && sort.sortOrder ? { sortBy: `${sort.sortBy}:${sort.sortOrder}` } : {})
+    }
+    const response = await useApi().get('/categories', params )
+    const data = response.data.results.map((item) => ({
       _id: item._id,
       id: item._id,
       name: item.name,
       description: item.description
     }))
-
     return {
       data: data,
       meta: {
-        page: 1,
-        pageSize: data.length,
-        totalPages: 1,
-        totalResults: data.length
+        page: response.data.page,
+        pageSize: response.data.limit,
+        totalPages: response.data.totalPages,
+        totalResults: response.data.totalResults,
+        sortBy: sort.sortBy,
+        sortOrder: sort.sortOrder
       }
     }
   } catch (error) {
