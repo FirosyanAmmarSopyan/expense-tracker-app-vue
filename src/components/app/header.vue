@@ -2,9 +2,10 @@
 import { ref, computed, h, watch, onMounted, onUnmounted } from 'vue'
 import { useResizeObserver } from '@vueuse/core'
 import { useGlobalStore } from '@/stores/global'
+import { CloudLightning } from '@vicons/carbon'
 import { QuestionCircle20Regular, Grid28Filled, ShieldTask48Filled } from '@vicons/fluent'
 import { LogOutOutline, PersonOutline, Albums, StatsChart } from '@vicons/ionicons5'
-import { NIcon ,useNotification} from 'naive-ui'
+import { NIcon, useNotification } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import Credit from '../Credit.vue'
 import { DehazeFilled } from '@vicons/material'
@@ -29,8 +30,6 @@ const isDarkTheme = computed({
     localStorage.setItem('theme', globalStore.theme) // Save theme to localStorage
   }
 })
-
-
 
 const handleToggleCollapsed = () => {
   globalStore.toggleCollapsed()
@@ -112,7 +111,6 @@ const getUserData = async () => {
     headers: {
       Authorization: `Bearer ${token}`
     }
-
   })
   userData.value = response.data
 }
@@ -165,7 +163,6 @@ onMounted(async () => {
 </script>
 
 <template>
-
   <div class="header" ref="headerRef">
     <div class="logo">
       <template v-if="globalStore.theme === 'light'">
@@ -223,12 +220,10 @@ onMounted(async () => {
     </n-button>
     <DrawerSearch v-model:show="globalStore.drawerSearchActive" />
     <div class="profile-content">
-      <n-avatar
-        :size="35"
-        round
-        src="/ava-ic.svg"
-      />
-      <div style="max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{userData?.username}}</div>
+      <n-avatar :size="35" round src="/ava-ic.svg" />
+      <div style="max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+        {{ userData?.username }}
+      </div>
       <div class="profile-content-item" style="cursor: pointer !important">
         <n-popover
           trigger="click"
@@ -285,11 +280,18 @@ onMounted(async () => {
               style="cursor: pointer !important; text-decoration: none"
               @click.prevent="router.push('/profile') && (globalStore.miniScreenCollapsed = false)"
             >
-              <n-avatar
-                round
-                :src="globalStore?.userData?.picture"
-                style="width: 35px; height: 35px; flex-shrink: 0"
-              />
+              <n-avatar round src="/ava-ic.svg" style="width: 35px; height: 35px; flex-shrink: 0" />
+              <div
+                style="
+                  max-width: 100px;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                  color: var(--text-color);
+                "
+              >
+                {{ userData?.username }}
+              </div>
               <div class="paragraph-14-semibold">
                 {{ globalStore?.userData?.name?.substring(0, 2).toUpperCase() }}
               </div>
@@ -380,6 +382,29 @@ onMounted(async () => {
                 }"
               >
                 Expense Management
+              </div>
+            </a>
+            <a
+              href="/express-expense"
+              class="mini-screen-menu-item"
+              :class="{ 'bg-primary-00 round': route.path === '/express-expense' }"
+              @click.prevent="
+                router.push('/express-expense') && (globalStore.miniScreenCollapsed = false)
+              "
+            >
+              <n-icon
+                :component="CloudLightning"
+                size="24"
+                :color="route.path === '/express-expense' ? 'var(--color-default)' : '#9E9E9E'"
+              />
+              <div
+                class="paragraph-14-semibold"
+                :class="{
+                  'text-primary': route.path === '/express-expense',
+                  'text-grey': route.path !== '/express-expense'
+                }"
+              >
+                Express Expense
               </div>
             </a>
 
