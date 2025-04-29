@@ -5,60 +5,10 @@
         <div class="loading-text">Processing your receipt...</div>
       </template>
     </n-spin>
-    <n-grid x-gap="20" y-gap="20" cols="1" item-responsive>
-      <n-gi class="left-section">
-        <div
-          style="
-            width: 100%;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-          "
-        >
-          <div class="header-container">
-            <div class="header-semibold">Expense Managements</div>
-          </div>
-          <div class="tools-container">
-            <div class="search-bar">
-              <SearchBar
-                :queryFn="fetchSearchCompany"
-                :isNavigation="false"
-                title="Search Expenses"
-              />
-            </div>
-            <div class="tools-container-buttons">
-              <n-button
-                round
-                style="background-color: var(--primary-20); color: white"
-                size="medium"
-                @click="handleAdd"
-                class="paragraph-14-semibold"
-              >
-                <n-icon size="20" style="margin-right: 0.2rem">
-                  <CirclePlus />
-                </n-icon>
-                Add
-              </n-button>
-              <n-button
-                round
-                style="background-color: var(--primary-20); color: white"
-                size="medium"
-                @click="handleExport"
-                class="paragraph-14-semibold"
-              >
-                <n-image
-                  src="/export-ic.svg"
-                  width="14"
-                  height="14"
-                  preview-disabled
-                  style="margin-right: 0.2rem"
-                />
-                Export
-              </n-button>
-            </div>
-          </div>
+    <n-grid x-gap="20" y-gap="20" :cols="24" item-responsive>
+      <n-gi :span="leftSectionSpan" class="left-section">
+        <div class="header-container">
+          <div class="header-semibold">Express Expense</div>
         </div>
         <div class="file-upload-section" @click="triggerFileInput">
           <div style="margin-bottom: 12px">
@@ -84,7 +34,9 @@
             </n-button>
           </div>
         </div>
-        <div class="left-section-content">
+      </n-gi>
+      <n-gi :span="rightSectionSpan" class="right-section">
+        <div class="right-section-content">
           <DataTable
             class="table"
             :queryFn="fetchExpenses"
@@ -643,6 +595,14 @@ const newItem = ref({
 
 const windowWidth = ref(window.innerWidth)
 
+const leftSectionSpan = computed(() => {
+  return windowWidth.value <= 768 ? 20 : 6
+})
+
+const rightSectionSpan = computed(() => {
+  return windowWidth.value <= 768 ? 20 : 18
+})
+
 const resetForm = () => {
   newItem.value = {
     name: '',
@@ -982,7 +942,7 @@ const handleEditSubmit = async () => {
   try {
     await useApi().patch(`/expenses/${editFormValue.value._id}`, {
       category: editFormValue.value.category,
-      date: editFormValue.value.date ? new Date(editFormValue.value.date).toISOString() : null,
+      date: editFormValue.value.date ? new Date(editFormValue.date).toISOString() : null,
       name: editFormValue.value.name,
       vendorName: editFormValue.value.vendorName
     })
@@ -1078,84 +1038,110 @@ const handleFileInputChange = async (event) => {
     const maxSizeInBytes = 1048576 // 1MB
     
     // Process the file - either use as is or compress it
-    const processFile = (fileToProcess) => {
+    const processFile = async (fileToProcess) => {
       const formData = new FormData()
       formData.append('file', fileToProcess)
       
       isLoading.value = true
-      useApi()
-        .post('/ai/extract-expense', formData, {
+      try {
+        const response = await useApi().post('/ai/extract-expense', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
         })
-        .then((response) => {
-          extractedData.value = response?.data
-          const formattedData = JSON.parse(JSON.stringify(response?.data?.data))
+        
+        const extractedData = response?.data
+        const formattedData = JSON.parse(JSON.stringify(extractedData?.data))
 
-          // Handle date safely
-          if (formattedData.date) {
-            try {
-              // Check if date is already in YYYY-MM-DD format
-              if (/^\d{4}-\d{2}-\d{2}$/.test(formattedData.date)) {
-                // Date is already in correct format, no need to convert
+        // Handle date safely
+        if (formattedData.date) {
+          try {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(formattedData.date)) {
+              const parsedDate = new Date(formattedData.date)
+              if (!isNaN(parsedDate.getTime())) {
+                formattedData.date = parsedDate.toISOString().split('T')[0]
               } else {
-                // Try to parse the date
-                const parsedDate = new Date(formattedData.date)
-                if (!isNaN(parsedDate.getTime())) {
-                  formattedData.date = parsedDate.toISOString().split('T')[0]
-                } else {
-                  // If date is invalid, set to today's date
-                  formattedData.date = new Date().toISOString().split('T')[0]
-                }
+                formattedData.date = new Date().toISOString().split('T')[0]
               }
-            } catch (error) {
-              console.error('Error parsing date:', error)
-              // Set to today's date if there's an error
-              formattedData.date = new Date().toISOString().split('T')[0]
             }
-          } else {
-            // If no date provided, set to today's date
+          } catch (error) {
+            console.error('Error parsing date:', error)
             formattedData.date = new Date().toISOString().split('T')[0]
           }
+        } else {
+          formattedData.date = new Date().toISOString().split('T')[0]
+        }
 
-          // Find category ID from the extracted category name
-          if (formattedData.category) {
-            const category = categories.value.find((cat) => cat.label === formattedData.category)
-            formattedData.categoryId = category ? category.value : null
-          }
-          // Ensure items array exists and has the correct structure
-          if (formattedData.items) {
-            formattedData.items = formattedData.items.map((item) => ({
-              name: item.name || '',
-              quantity: Number(item.quantity) || 1,
-              price: Number(item.price) || 0
+        // Find category ID from the extracted category name
+        if (formattedData.category) {
+          const category = categories.value.find((cat) => cat.label === formattedData.category)
+          formattedData.categoryId = category ? category.value : null
+        }
+
+        // Ensure items array exists and has the correct structure
+        if (formattedData.items) {
+          formattedData.items = formattedData.items.map((item) => ({
+            name: item.name || '',
+            quantity: Number(item.quantity) || 1,
+            price: Number(item.price) || 0
+          }))
+        } else {
+          formattedData.items = []
+        }
+
+        // Directly process the extracted data
+        const processedData = {
+          type: 'ADD_EXPENSE',
+          args: {
+            name: formattedData.name,
+            date: formattedData.date,
+            vendorName: formattedData.vendorName,
+            category: formattedData.categoryId,
+            items: formattedData.items.map((item) => ({
+              name: item.name,
+              quantity: Number(item.quantity),
+              price: Number(item.price)
             }))
-          } else {
-            formattedData.items = []
-          }
-          editableExtractedData.value = formattedData
-          showExtractedDataModal.value = true
+          },
+          oldData: null,
+          newData: null
+        }
+
+        // Process the task
+        await useApi().patch(`/tasks/${extractedData?.task?._id}/edit`, {
+          data: processedData
         })
-        .catch((error) => {
-          console.error('Error uploading file:', error)
-          notification.error({
-            title: 'Error',
-            content: 'Failed to process the receipt',
-            duration: 3000
-          })
+
+        await useApi().post(`/tasks/${extractedData?.task?._id}/run`, {
+          data: processedData
         })
-        .finally(() => {
-          isLoading.value = false
-          event.target.value = ''
+
+        // Refresh the table
+        dataTableRef.value?.refresh()
+
+        notification.success({
+          title: 'Success',
+          content: 'Receipt processed successfully',
+          duration: 3000
         })
+      } catch (error) {
+        console.error('Error processing receipt:', error)
+        notification.error({
+          title: 'Error',
+          content: 'Failed to process the receipt',
+          duration: 3000
+        })
+      } finally {
+        isLoading.value = false
+        event.target.value = ''
+      }
     }
 
     // Check if file needs compression
     if (file.size > maxSizeInBytes) {
       // Compress the file
       new Compressor(file, {
-        quality: 0.6, // 0.6 is a good balance between quality and size
+        quality: 0.6,
         maxWidth: 1920,
         maxHeight: 1920,
         convertSize: maxSizeInBytes,
@@ -1382,86 +1368,32 @@ onUnmounted(() => {
 .left-section {
   background-color: var(--background-color);
   border-radius: 30px;
-  padding-left: 1.4rem;
-  padding-bottom: 1.5rem;
-  padding-right: 1.4rem;
+  padding: 1.4rem;
   min-height: 89vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .right-section {
-  background-color: white;
+  background-color: var(--background-color);
   border-radius: 30px;
-  padding: 1.2rem;
+  padding: 1.4rem;
   min-height: 89vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
-.left-section-content {
+.right-section-content {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   background-color: var(--background-color);
   border-radius: 10px;
   padding: 1rem;
-  margin-top: 1rem;
   outline: 2px solid var(--background-color-sec);
-}
-
-:deep(.custom-hover:hover .paragraph-14-semibold) {
-  /* color: #9e9e9e !important; */
-  text-decoration: underline;
-}
-
-:deep(.clicked-tag:hover) {
-  background-color: #1a9c4d !important;
-  color: #e3faec !important;
-}
-
-:deep(.n-image.n-image--preview-disabled img) {
-  max-width: 40px !important;
-  max-height: 40px !important;
-  object-fit: contain !important;
-}
-
-@media screen and (max-width: 768px) {
-  .container {
-    background-color: var(--background-color-sec);
-  }
-}
-
-@media (max-width: 1400px) {
-  .left-section,
-  .right-section {
-    margin-bottom: 20px;
-  }
-}
-
-.selected-rows {
-  margin: 1rem 0;
-  padding: 1rem;
-  background-color: var(--background-color-sec);
-  border-radius: 8px;
-}
-
-.selected-row-item {
-  margin: 0.5rem 0;
-  padding: 0.5rem;
-  background-color: white;
-  border-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.search-bar {
-  margin-bottom: 1rem;
-  margin-top: 1rem;
-  width: 40%;
-}
-
-:deep(.n-input.n-input--resizable.n-input--stateful) {
-  border-radius: 30px !important;
-}
-
-:deep(.n-input.n-input--textarea.n-input--resizable.n-input--stateful) {
-  border-radius: 15px !important;
+  flex: 1;
 }
 
 .file-upload-section {
@@ -1474,6 +1406,9 @@ onUnmounted(() => {
   border-radius: 30px;
   border: 2px dashed var(--neutral-20);
   cursor: pointer;
+  flex: 1;
+  justify-content: center;
+  max-width: 100%;
 }
 
 .items-list-container {
@@ -1603,10 +1538,21 @@ onUnmounted(() => {
 }
 
 @media screen and (max-width: 768px) {
-  .expense-info-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+  .container {
+    background-color: var(--background-color-sec);
+  }
+  
+  :deep(.n-grid) {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .left-section,
+  .right-section {
+    min-height: auto;
+  }
+  
+  :deep(.n-gi) {
+    width: 100% !important;
   }
 }
 

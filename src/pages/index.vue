@@ -29,7 +29,9 @@
                 "
               >
                 <div style="display: flex; flex-direction: column; gap: 0.5rem">
-                  <div class="header-semibold-xl" style="color: var(--text-color)">{{ formatCurrency(totalExpense, 'Rp', 0) }}</div>
+                  <div class="header-semibold-xl" style="color: var(--text-color)">
+                    {{ formatCurrency(totalExpense, 'Rp', 0) }}
+                  </div>
                   <div class="paragraph-14-semibold" style="color: var(--text-color)">
                     Total Expenses
                   </div>
@@ -63,7 +65,9 @@
                 "
               >
                 <div style="display: flex; flex-direction: column; gap: 0.5rem">
-                  <div class="header-semibold-xl" style="color: var(--text-color)">+{{ expenseTrend.toFixed(2) }}%</div>
+                  <div class="header-semibold-xl" style="color: var(--text-color)">
+                    +{{ expenseTrend.toFixed(2) }}%
+                  </div>
                   <div class="paragraph-14-semibold" style="color: var(--text-color)">
                     Expense Trend
                   </div>
@@ -92,14 +96,14 @@
     <div class="bottom-container">
       <n-grid x-gap="20" y-gap="20" cols="1" item-responsive>
         <n-gi class="left-section">
-          <div class="header-semibold" style="color: var(--text-color);padding:1rem 0;">Recent Activity</div>
+          <div class="header-semibold" style="color: var(--text-color); padding: 1rem 0">
+            Recent Activity
+          </div>
           <DataTable
             class="table"
-            :queryFn="fetchHotCompanies"
+            :queryFn="fetchRecentActivity"
             :columns="columns"
             :loading="loading"
-            :useCheckbox="true"
-            @update:selectedRows="handleCheck"
             :pagination="false"
             ref="dataTableRef"
           />
@@ -107,15 +111,94 @@
       </n-grid>
     </div>
   </div>
+
+  <ChangeModal
+    :isVisible="showItemsModal"
+    modalTitle="Items Detail"
+    modalType="customize"
+    :textOnly="false"
+    :formInputs="[]"
+    :style="{ width: windowWidth > 1420 ? '60vw' : '95vw' }"
+    @update:isVisible="(val) => (val ? null : handleModalClose())"
+  >
+    <div style="width: 100%; padding-top: 1rem">
+      <div style="display: flex; align-items: center; width: 100%;padding:1rem 0">
+        <div class="paragraph-16-semibold">Detail Expense Management</div>
+      </div>
+
+
+      <div class="items-list-container">
+        <div class="items-header">
+          <div class="grid-item">Name</div>
+          <div class="grid-item" style="padding-left: 1rem">Qty</div>
+          <div class="grid-item">Price</div>
+          <div class="grid-item">Subtotal</div>
+        </div>
+
+        <div v-for="(item, index) in selectedItems" :key="index" class="items-row">
+          <div class="grid-item">
+            <template v-if="item.isEditing">
+              <n-input
+                v-model:value="item.name"
+                placeholder="Item Name"
+                class="paragraph-14-regular input-info"
+              />
+            </template>
+            <template v-else>
+              <div class="item-with-status">
+                {{ item.name || 'Unnamed Item' }}
+                <n-badge v-if="item.isNew" dot type="success" />
+                <n-badge v-else-if="item.isUpdated" dot type="info" />
+              </div>
+            </template>
+          </div>
+          <div class="grid-item" style="padding-left: 1rem">
+            <template v-if="item.isEditing">
+              <n-input
+                v-model:value="item.quantity"
+                placeholder="Quantity"
+                @keydown="handleNumericInput"
+                class="paragraph-14-regular input-info"
+              />
+            </template>
+            <template v-else>
+              {{ item.quantity || '0' }}
+            </template>
+          </div>
+          <div class="grid-item">
+            <template v-if="item.isEditing">
+              <n-input
+                v-model:value="item.price"
+                placeholder="Price"
+                @keydown="handleNumericInput"
+                class="paragraph-14-regular input-info"
+              >
+                <template #prefix>Rp</template>
+              </n-input>
+            </template>
+            <template v-else> {{ formatCurrency(Number(item.price || 0), 'Rp', 0) }} </template>
+          </div>
+          <div class="grid-item" style="font-weight: bold; color: #1890ff">
+            <template v-if="item.isEditing">
+              {{ formatCurrency(Number(item.quantity || 0) * Number(item.price || 0), 'Rp', 0) }}
+            </template>
+            <template v-else>
+              {{ formatCurrency(Number(item.subtotal || 0), 'Rp', 0) }}
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </ChangeModal>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, h, watch } from 'vue'
-import { NTag, NIcon, NImage, NBadge, NTooltip } from 'naive-ui'
+import { NTag, NIcon, NImage, NBadge, NButton } from 'naive-ui'
 import { AlertCircle } from '@vicons/tabler'
 import { ArrowUp } from '@vicons/fa'
 import Chart from 'chart.js/auto'
-import { formatNumber, formatCurrency, formatNumberWithSuffix } from '@/utils/formatter';
+import { formatNumber, formatCurrency, formatNumberWithSuffix } from '@/utils/formatter'
 
 const dataTableRef = ref(null)
 const loading = ref(false)
@@ -124,8 +207,13 @@ const totalExpense = ref(0)
 const expenseTrend = ref(0)
 const serverData = ref(null)
 const chartRef = ref(null)
+const showItemsModal = ref(false)
+const selectedItems = ref([])
+const currentExpenseId = ref(null)
+const currentExpense = ref(null)
 let myChart = null
 const categoryMap = ref({})
+const windowWidth = ref(window.innerWidth)
 
 const checkScreenSize = () => {
   miniScreen.value = window.innerWidth < 1240
@@ -147,15 +235,15 @@ const fetchChartData = async () => {
     loading.value = true
     const response = await useApi().get(`/dashboard/expense-logs?period=${selectedPeriod.value}`)
     serverData.value = response.data
-    
+
     // Create a mapping of category IDs to names
     if (response.data.categories && Array.isArray(response.data.categories)) {
       categoryMap.value = {}
-      response.data.categories.forEach(category => {
+      response.data.categories.forEach((category) => {
         categoryMap.value[category.id] = category.name
       })
     }
-    
+
     initChart()
   } catch (error) {
     console.error('Error fetching chart data:', error)
@@ -167,53 +255,90 @@ const fetchChartData = async () => {
 // Process server data for chart
 const processChartData = () => {
   if (!serverData.value) return { labels: [], datasets: [] }
-  
+
   const formatDate = (dateString) => {
     // Check if it's a yearly format (MM/YYYY)
     if (dateString.split('/').length === 2) {
-      const [month, year] = dateString.split('/');
-      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                         'July', 'August', 'September', 'October', 'November', 'December'];
-      return `${monthNames[parseInt(month)-1]} ${year}`;
-    } 
+      const [month, year] = dateString.split('/')
+      const monthNames = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December'
+      ]
+      return `${monthNames[parseInt(month) - 1]} ${year}`
+    }
     // Regular format (DD/MM/YYYY)
     else {
-      const [day, month, year] = dateString.split('/');
-      const date = new Date(`${year}-${month}-${day}`);
-      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                          'July', 'August', 'September', 'October', 'November', 'December'];
-      return `${day} ${monthNames[date.getMonth()]} ${year}`;
+      const [day, month, year] = dateString.split('/')
+      const date = new Date(`${year}-${month}-${day}`)
+      const monthNames = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December'
+      ]
+      return `${day} ${monthNames[date.getMonth()]} ${year}`
     }
-  };
-  
-  const labels = serverData.value.data.map(item => formatDate(item.date));
-  
+  }
+
+  const labels = serverData.value.data.map((item) => formatDate(item.date))
+
   // Get all unique category IDs from the data
-  const categoryIds = new Set();
-  serverData.value.data.forEach(item => {
+  const categoryIds = new Set()
+  serverData.value.data.forEach((item) => {
     if (item.categories) {
-      Object.keys(item.categories).forEach(categoryId => {
+      Object.keys(item.categories).forEach((categoryId) => {
         if (categoryId !== 'total') {
-          categoryIds.add(categoryId);
+          categoryIds.add(categoryId)
         }
-      });
+      })
     }
-  });
-  
+  })
+
   // Create datasets for each category
-  const colors = ['#1a9c4d', '#1890ff', '#ff6b6b', '#ffc107', '#9c27b0', '#607d8b', 
-                  '#795548', '#009688', '#673ab7', '#3f51b5', '#e91e63', '#f44336'];
-  
+  const colors = [
+    '#1a9c4d',
+    '#1890ff',
+    '#ff6b6b',
+    '#ffc107',
+    '#9c27b0',
+    '#607d8b',
+    '#795548',
+    '#009688',
+    '#673ab7',
+    '#3f51b5',
+    '#e91e63',
+    '#f44336'
+  ]
+
   const datasets = Array.from(categoryIds).map((categoryId, index) => {
-    const colorIndex = index % colors.length;
-    
+    const colorIndex = index % colors.length
+
     // Extract data for this category
-    const data = serverData.value.data.map(item => {
-      return item.categories && item.categories[categoryId] ? item.categories[categoryId] : 0;
-    });
-    
-    const categoryName = categoryMap.value[categoryId] || `Category ${categoryId.substring(categoryId.length - 5)}`;
-    
+    const data = serverData.value.data.map((item) => {
+      return item.categories && item.categories[categoryId] ? item.categories[categoryId] : 0
+    })
+
+    const categoryName =
+      categoryMap.value[categoryId] || `Category ${categoryId.substring(categoryId.length - 5)}`
+
     return {
       label: categoryName,
       data: data,
@@ -228,14 +353,14 @@ const processChartData = () => {
       pointHoverBackgroundColor: colors[colorIndex],
       pointHoverBorderColor: '#fff',
       pointHoverBorderWidth: 2
-    };
-  });
-  
+    }
+  })
+
   // Add total line
   if (datasets.length > 0) {
     datasets.push({
       label: 'Total',
-      data: serverData.value.data.map(item => item.total),
+      data: serverData.value.data.map((item) => item.total),
       fill: false,
       borderColor: '#000000',
       borderWidth: 2,
@@ -248,83 +373,105 @@ const processChartData = () => {
       pointHoverBackgroundColor: '#000000',
       pointHoverBorderColor: '#fff',
       pointHoverBorderWidth: 2
-    });
+    })
   }
-  
-  return { labels, datasets };
-}
 
-const handleCheck = (rowKeys) => {
-  checkedRowKeysRef.value = rowKeys
+  return { labels, datasets }
 }
 
 const columns = computed(() => [
   {
-    title: 'ID',
-    key: 'id',
-    width: 100
-  },
-  {
-    title: 'User ID',
-    key: 'userId',
-    width: 100
-  },
-  {
-    title: 'Title',
-    key: 'title',
-    width: '30%'
-  },
-  {
-    title: 'Body',
-    key: 'body'
-  },
-  {
-    title: 'Action',
-    key: 'action',
-    width: '7%',
+    title: 'Date',
+    key: 'date',
+    width: '10%',
     render(row) {
-      return h(
-        'div',
-        {
-          style: {
-            display: 'flex',
-            gap: '8px'
-          }
-        },
-        [
-          h(
-            'button',
-            {
-              class: 'paragraph-11-regular',
-              style: {
-                color: 'white',
-                backgroundColor: '#1890ff',
-                border: 'none',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              },
-              onClick: () => handleEdit(row)
-            },
-            'Edit'
-          )
-        ]
-      )
+      return row.date
     }
+  },
+  {
+    title: 'Name',
+    key: 'name',
+    width: '20%'
+  },
+  {
+    title: 'Category',
+    key: 'category'
+  },
+  {
+    title: 'Total Amount',
+    key: 'totalAmount',
+    render(row) {
+      return formatCurrency(row.totalAmount, 'Rp', 0)
+    }
+  },
+  {
+    title: 'Items',
+    key: 'items',
+    render(row) {
+      return h('div', [
+        h(
+          NButton,
+          {
+            class: 'paragraph-11-regular',
+            style: {
+              color: 'white',
+              backgroundColor: 'var(--primary-20)',
+              cursor: 'pointer'
+            },
+            size: 'small',
+            round: true,
+
+            onClick: () => handleShowItems(row.items, row.id)
+          },
+          'Detail'
+        )
+      ])
+    },
+    width: '7%'
   }
 ])
 
-const fetchHotCompanies = async (page, pageSize, updateLoading) => {
+const formatDateToReadable = (dateString) => {
+  if (!dateString) return ''
+
+  const date = new Date(dateString)
+  const day = date.getDate()
+
+  // Array of month names in lowercase
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December'
+  ]
+
+  const month = months[date.getMonth()]
+  const year = date.getFullYear()
+
+  return `${day} ${month} ${year}`
+}
+
+const fetchRecentActivity = async (page, pageSize, updateLoading) => {
   try {
     if (typeof updateLoading === 'function') {
       updateLoading(true)
     }
-    const response = await useApi().get('/posts')
-    const data = response.data.map((item) => ({
-      id: item.id,
-      userId: item.userId,
-      title: item.title,
-      body: item.body
+    const response = await useApi().get('/expenses/recent-activities')
+    const data = response?.data?.data?.map((item) => ({
+      date: formatDateToReadable(item.date),
+      name: item.name,
+      category: item.category?.name,
+      totalAmount: item.totalAmount,
+      items: item.items,
+      id: item._id || item.id
     }))
 
     return {
@@ -357,6 +504,38 @@ const fetchHotCompanies = async (page, pageSize, updateLoading) => {
   }
 }
 
+const handleShowItems = (items, expenseId) => {
+  selectedItems.value = Array.isArray(items) ? items : [items]
+  currentExpenseId.value = expenseId
+
+  useApi()
+    .get(`/expenses/${expenseId}`)
+    .then((response) => {
+      const expenseData = response.data
+      // Format date to YYYY-MM-DD for input type="date"
+      if (expenseData.date) {
+        const date = new Date(expenseData.date)
+        expenseData.date = date.toISOString().split('T')[0]
+      }
+      currentExpense.value = expenseData
+
+      // Store the original data for the whole expense
+      currentExpense.value.originalData = JSON.parse(JSON.stringify(currentExpense.value))
+      
+      showItemsModal.value = true
+    })
+    .catch((error) => {
+      console.error('Error fetching expense details:', error)
+    })
+}
+
+const handleModalClose = () => {
+  showItemsModal.value = false
+  selectedItems.value = []
+  currentExpenseId.value = null
+  currentExpense.value = null
+}
+
 const fetchExpenseSummary = async () => {
   try {
     const response = await useApi().get(`/dashboard/expense-data?period=${selectedPeriod.value}`)
@@ -375,7 +554,7 @@ const initChart = () => {
   }
 
   let chartData = { labels: [], datasets: [] }
-  
+
   if (serverData.value) {
     chartData = processChartData()
   } else {
@@ -395,7 +574,20 @@ const initChart = () => {
       }
     } else if (selectedPeriod.value === 'month') {
       chartData = {
-        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+        labels: [
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Dec'
+        ],
         datasets: [
           {
             label: 'No Data',
@@ -422,11 +614,12 @@ const initChart = () => {
     }
   }
 
-  const periodLabel = selectedPeriod.value === 'week' 
-    ? 'Weekly Expenses' 
-    : selectedPeriod.value === 'month'
-      ? 'Monthly Expenses'
-      : 'Yearly Expenses'
+  const periodLabel =
+    selectedPeriod.value === 'week'
+      ? 'Weekly Expenses'
+      : selectedPeriod.value === 'month'
+        ? 'Monthly Expenses'
+        : 'Yearly Expenses'
 
   // Force current miniScreen value to be used
   const currentMiniScreen = miniScreen.value
@@ -457,7 +650,7 @@ const initChart = () => {
       plugins: {
         legend: {
           display: true,
-          position: 'bottom' ,
+          position: 'bottom',
           align: 'start',
           labels: {
             usePointStyle: true,
@@ -497,7 +690,7 @@ watch(selectedPeriod, () => {
 onMounted(() => {
   checkScreenSize()
   window.addEventListener('resize', checkScreenSize)
-  fetchHotCompanies()
+  fetchRecentActivity()
   fetchChartData()
   fetchExpenseSummary()
 })
@@ -611,16 +804,83 @@ onUnmounted(() => {
   min-width: 500px; /* Minimum width to ensure visibility of chart with legend */
 }
 
+
+.expense-info {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+}
+
+.expense-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 1rem;
+}
+
+.input-info {
+  background-color: var(--background-color-sec);
+}
+
+.items-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.items-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 8px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  font-weight: bold;
+  min-width: 600px;
+}
+
+.grid-item {
+  display: flex;
+  align-items: center;
+  width: 100% !important;
+  margin-bottom: 12px;
+  gap: 1rem;
+}
+
+.items-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+  align-items: center;
+  min-width: 600px;
+}
+
+.item-with-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
   .chart-container {
     width: 800px; /* Increased width for mobile to accommodate legend */
     padding-right: 50px; /* Add extra padding for the legend */
   }
-  
+
   .chart-scroll-container {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch; /* For smooth scrolling on iOS */
+  }
+  .expense-info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
   }
 }
 

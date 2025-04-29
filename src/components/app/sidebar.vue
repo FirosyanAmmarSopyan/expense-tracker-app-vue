@@ -19,10 +19,8 @@
   </n-layout>
 </template>
 <script setup>
-import { Grid28Filled, ShieldTask48Filled } from '@vicons/fluent'
-import { Albums, StatsChart, ChatbubbleOutline, CloseOutline } from '@vicons/ionicons5'
-import { AttachmentSharp } from '@vicons/material'
-import { ArrowRight } from '@vicons/tabler'
+import { Grid28Filled } from '@vicons/fluent'
+import { CloudLightning } from '@vicons/carbon'
 import { h, ref, computed, onMounted, onBeforeUnmount, inject, watch, provide } from 'vue'
 import { NIcon, NImage } from 'naive-ui'
 import { useGlobalStore } from '@/stores/global'
@@ -54,6 +52,7 @@ function getRouteKey(path) {
   if (path === '/') return 'dashboard'
   if (path === '/categories-management') return 'categories-management'
   if (path === '/expense-management') return 'expense-management'
+  if (path === '/express-expense') return 'express-expense'
   return 'unknown'
 }
 
@@ -117,6 +116,19 @@ const menuOptions = computed(() => {
         ),
       key: 'expense-management',
       icon: renderImage('/setting-ic.svg')
+    },
+    {
+      label: () =>
+        h(
+          'a',
+          {
+            href: '/express-expense',
+            style: { color: 'inherit', textDecoration: 'none' }
+          },
+          'Express Expense'
+        ),
+      key: 'express-expense',
+      icon: renderIcon(CloudLightning)
     }
   ]
 

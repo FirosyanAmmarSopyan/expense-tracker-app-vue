@@ -251,8 +251,7 @@ const handleEditSubmit = async () => {
 const columns = computed(() => [
   {
     title: 'ID',
-    key: 'id',
-    sorter: true
+    key: 'id'
   },
   {
     title: 'Name',
@@ -332,13 +331,13 @@ const columns = computed(() => [
   }
 ])
 
-const fetchCategories = async (page, pageSize, updateLoading, sort={}) => {
+const fetchCategories = async (page, pageSize, updateLoading , sort={}) => {
   try {
     if (typeof updateLoading === 'function') {
       updateLoading(true)
     }
     const params = {
-      page: page ,
+      page,
       limit: pageSize,
       ...(sort.sortBy && sort.sortOrder ? { sortBy: `${sort.sortBy}:${sort.sortOrder}` } : {})
     }
@@ -349,6 +348,7 @@ const fetchCategories = async (page, pageSize, updateLoading, sort={}) => {
       name: item.name,
       description: item.description
     }))
+
     return {
       data: data,
       meta: {
@@ -371,7 +371,9 @@ const fetchCategories = async (page, pageSize, updateLoading, sort={}) => {
         page: 1,
         pageSize: 0,
         totalPages: 0,
-        totalResults: 0
+        totalResults: 0,
+        sortBy: '',
+        sortOrder: ''
       }
     }
   } finally {
