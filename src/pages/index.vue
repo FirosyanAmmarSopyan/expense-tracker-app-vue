@@ -42,10 +42,11 @@
                     class="paragraph-14-regular"
                     style="display: flex; align-items: center; gap: 0.5rem"
                   >
-                    <n-icon color="#005F97">
-                      <ArrowUp />
+                    <n-icon :color="isIncreasing ? '#005F97' : '#FF0000'">
+                      <ArrowUp v-if="isIncreasing" />
+                      <ArrowDown v-else />
                     </n-icon>
-                    2% more than last {{ selectedPeriod }}
+                    {{ expenseTrendPercentage }}% more than last {{ selectedPeriod }}
                   </div>
                 </div>
               </div>
@@ -78,10 +79,11 @@
                     class="paragraph-14-regular"
                     style="display: flex; align-items: center; gap: 0.5rem"
                   >
-                    <n-icon color="#005F97">
-                      <ArrowUp />
+                    <n-icon :color="isIncreasing ? '#005F97' : '#FF0000'">
+                      <ArrowUp v-if="isIncreasing" />
+                      <ArrowDown v-else />
                     </n-icon>
-                    2% more than last {{ selectedPeriod }}
+                    {{ expenseTrendPercentage }}% more than last {{ selectedPeriod }}
                   </div>
                 </div>
               </div>
@@ -196,7 +198,7 @@
 import { ref, onMounted, onUnmounted, computed, h, watch } from 'vue'
 import { NTag, NIcon, NImage, NBadge, NButton } from 'naive-ui'
 import { AlertCircle } from '@vicons/tabler'
-import { ArrowUp } from '@vicons/fa'
+import { ArrowUp, ArrowDown } from '@vicons/fa'
 import Chart from 'chart.js/auto'
 import { formatNumber, formatCurrency, formatNumberWithSuffix } from '@/utils/formatter'
 
@@ -205,6 +207,8 @@ const loading = ref(false)
 const miniScreen = ref(false)
 const totalExpense = ref(0)
 const expenseTrend = ref(0)
+const expenseTrendPercentage = ref(0)
+const isIncreasing = ref(false)
 const serverData = ref(null)
 const chartRef = ref(null)
 const showItemsModal = ref(false)
@@ -541,6 +545,8 @@ const fetchExpenseSummary = async () => {
     const response = await useApi().get(`/dashboard/expense-data?period=${selectedPeriod.value}`)
     totalExpense.value = response.data.totalExpense
     expenseTrend.value = response.data.trend
+    expenseTrendPercentage.value = response.data.percentageDifference
+    isIncreasing.value = response.data.isIncrease
   } catch (error) {
     console.log(error)
   }

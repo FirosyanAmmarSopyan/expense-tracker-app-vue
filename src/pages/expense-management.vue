@@ -22,10 +22,11 @@
           </div>
           <div class="tools-container">
             <div class="search-bar">
-              <SearchBar
-                :queryFn="fetchSearchCompany"
+              <SearchBarChange
+                :queryFn="fetchExpenses"
                 :isNavigation="false"
                 title="Search Expenses"
+                @search="handleSearch"
               />
             </div>
             <div class="tools-container-buttons">
@@ -642,6 +643,7 @@ const newItem = ref({
 })
 
 const windowWidth = ref(window.innerWidth)
+const searchQuery = ref('')
 
 const resetForm = () => {
   newItem.value = {
@@ -860,7 +862,7 @@ const columns = computed(() => [
   }
 ])
 
-const fetchExpenses = async (page, pageSize, updateLoading, sort = {}) => {
+const fetchExpenses = async (page, pageSize, updateLoading, sort = {}, search = '') => {
   try {
     if (typeof updateLoading === 'function') {
       updateLoading(true)
@@ -868,8 +870,10 @@ const fetchExpenses = async (page, pageSize, updateLoading, sort = {}) => {
     const params = {
       page: page,
       limit: pageSize,
-      ...(sort.sortBy && sort.sortOrder ? { sortBy: `${sort.sortBy}:${sort.sortOrder}` } : {})
+      ...(sort.sortBy && sort.sortOrder ? { sortBy: `${sort.sortBy}:${sort.sortOrder}` } : {}),
+      ...(searchQuery.value ? { keyword: searchQuery.value } : {})
     }
+    console.log('Search params:', params) // Untuk debugging
     const response = await useApi().get('/expenses', params)
     const data = response?.data?.data?.map((item) => ({
       id: item?._id,
@@ -994,23 +998,10 @@ const handleEditSubmit = async () => {
   }
 }
 
-const handleSearch = debounce(async (query) => {
-  if (!query.length) {
-    await fetchCategories()
-    return
-  }
-
-  try {
-    const response = await useApi().get(`/categories?search=${query}`)
-    categories.value = response.data.map((item) => ({
-      label: item.name,
-      value: item._id
-    }))
-  } catch (error) {
-    console.error('Error searching categories:', error)
-    categories.value = []
-  }
-}, 500)
+const handleSearch = (query) => {
+  searchQuery.value = query
+  dataTableRef.value?.refresh()
+}
 
 const handleEditItem = (item) => {
   item.originalData = { ...item }
@@ -1453,7 +1444,7 @@ onUnmounted(() => {
 .search-bar {
   margin-bottom: 1rem;
   margin-top: 1rem;
-  width: 40%;
+  width: 50%;
 }
 
 :deep(.n-input.n-input--resizable.n-input--stateful) {
